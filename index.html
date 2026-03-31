@@ -1,815 +1,819 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area 
-} from 'recharts';
-import { 
-  LayoutDashboard, 
-  Video, 
-  Settings, 
-  BarChart3, 
-  Smartphone, 
-  Bell, 
-  LogOut, 
-  User, 
-  AlertTriangle, 
-  Droplets, 
-  Thermometer, 
-  Bug, 
-  ShieldCheck, 
-  Wind,
-  Power,
-  Zap,
-  Plus,
-  Moon,
-  Sun,
-  Volume2,
-  FileText,
-  MapPin,
-  Wifi,
-  WifiOff
-} from 'lucide-react';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PestGuard — Pest Disruption System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-// --- CONFIG & CONSTANTS ---
-const APP_ID = "pest-disruption-v1";
-const ROLES = { FARMER: 'Farmer', ADMIN: 'Admin' };
-
-// --- UTILS ---
-const formatTimestamp = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-const App = () => {
-  // --- STATE ---
-  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem(`${APP_ID}_user`)) || null);
-  const [page, setPage] = useState('dashboard');
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [notifications, setNotifications] = useState([]);
-  
-  // IoT & AI Data State
-  const [sensors, setSensors] = useState({ temp: 28, humidity: 65, moisture: 40 });
-  const [pestData, setPestData] = useState({ activity: 'Low', count: 12, yellowSpots: false });
-  const [historicalData, setHistoricalData] = useState([]);
-  
-  // Controls State
-  const [controls, setControls] = useState({
-    autoMode: true,
-    disruptionActive: false,
-    capsuleActive: false,
-    signalStrength: 75,
-    frequency: 'Medium'
-  });
-
-  // Devices State
-  const [devices, setDevices] = useState([
-    { id: 'IOT-001', name: 'North Field Hub', location: 'Field A', battery: 85, status: 'Active' },
-    { id: 'IOT-002', name: 'South Pheromone Dispenser', location: 'Field B', battery: 92, status: 'Active' },
-    { id: 'IOT-003', name: 'Fungal Camera Node', location: 'Field A', battery: 12, status: 'Offline' },
-  ]);
-
-  // --- MOCK API & BACKGROUND PROCESSES ---
-
-  // Handle Offline Status
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // Persistent State Sync
-  useEffect(() => {
-    const saved = localStorage.getItem(`${APP_ID}_state`);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setSensors(parsed.sensors);
-      setControls(parsed.controls);
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(`${APP_ID}_state`, JSON.stringify({ sensors, controls, pestData }));
-  }, [sensors, controls, pestData]);
-
-  // Simulated Live Data Stream
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Random sensor fluctuations
-      setSensors(prev => ({
-        temp: Math.max(15, Math.min(45, prev.temp + (Math.random() * 2 - 1))),
-        humidity: Math.max(30, Math.min(95, prev.humidity + (Math.random() * 4 - 2))),
-        moisture: Math.max(10, Math.min(100, prev.moisture + (Math.random() * 2 - 1)))
-      }));
-
-      // Random Pest Activity
-      setPestData(prev => {
-        const newCount = Math.max(0, prev.count + Math.floor(Math.random() * 5 - 2));
-        return {
-          count: newCount,
-          activity: newCount > 50 ? 'High' : newCount > 20 ? 'Medium' : 'Low',
-          yellowSpots: Math.random() > 0.8 // Randomly detect spots
-        };
-      });
-
-      // Update Historical Charts
-      setHistoricalData(prev => {
-        const newData = [...prev, { 
-          time: formatTimestamp(), 
-          humidity: Math.round(sensors.humidity), 
-          pests: pestData.count,
-          temp: Math.round(sensors.temp)
-        }].slice(-15);
-        return newData;
-      });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [sensors.humidity, sensors.temp, pestData.count]);
-
-  // BUSINESS LOGIC: Auto Mode Implementation
-  useEffect(() => {
-    if (controls.autoMode) {
-      let updates = {};
-      
-      // Fungus Logic: Humidity > 80% + Yellow Spots
-      if (sensors.humidity > 80 && pestData.yellowSpots) {
-        if (!controls.capsuleActive) {
-          updates.capsuleActive = true;
-          addNotification("Fungal Risk High: Auto-activating capsule system", "warning");
-        }
-      } else if (sensors.humidity < 70) {
-        if (controls.capsuleActive) updates.capsuleActive = false;
-      }
-
-      // Pest Logic: Count > 30
-      if (pestData.count > 30) {
-        if (!controls.disruptionActive) {
-          updates.disruptionActive = true;
-          addNotification("Pest Activity Spike: Disruption System Engaged", "info");
-        }
-      }
-
-      if (Object.keys(updates).length > 0) {
-        setControls(prev => ({ ...prev, ...updates }));
-      }
-    }
-  }, [sensors.humidity, pestData.yellowSpots, pestData.count, controls.autoMode]);
-
-  const addNotification = (text, type = 'info') => {
-    const newNote = { id: Date.now(), text, type, time: formatTimestamp() };
-    setNotifications(prev => [newNote, ...prev].slice(0, 10));
-  };
-
-  // --- ACTIONS ---
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const mockUser = { name: 'Rajesh Kumar', role: ROLES.FARMER, id: 'F-9921' };
-    setUser(mockUser);
-    localStorage.setItem(`${APP_ID}_user`, JSON.stringify(mockUser));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem(`${APP_ID}_user`);
-  };
-
-  const toggleControl = (key) => {
-    if (controls.autoMode && (key === 'disruptionActive' || key === 'capsuleActive')) {
-      addNotification("Manual override: Auto-mode disabled", "info");
-      setControls(prev => ({ ...prev, [key]: !prev[key], autoMode: false }));
-    } else {
-      setControls(prev => ({ ...prev, [key]: !prev[key] }));
-    }
-  };
-
-  // --- COMPONENTS ---
-
-  const SidebarItem = ({ id, icon: Icon, label }) => (
-    <button 
-      onClick={() => setPage(id)}
-      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-        page === id 
-          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
-          : 'text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'
-      }`}
-    >
-      <Icon size={20} />
-      <span className="font-medium">{label}</span>
-    </button>
-  );
-
-  const StatCard = ({ title, value, icon: Icon, color, trend }) => (
-    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex justify-between items-start mb-4">
-        <div className={`p-3 rounded-lg ${color} bg-opacity-10 text-opacity-100`}>
-          <Icon size={24} className={color.replace('bg-', 'text-')} />
-        </div>
-        {trend && (
-          <span className={`text-xs font-bold px-2 py-1 rounded-full ${trend.startsWith('+') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-            {trend}
-          </span>
-        )}
-      </div>
-      <h3 className="text-slate-500 text-sm font-medium">{title}</h3>
-      <p className="text-2xl font-bold text-slate-800">{value}</p>
-    </div>
-  );
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-emerald-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-emerald-100">
-          <div className="text-center mb-8">
-            <div className="inline-flex p-4 bg-emerald-100 rounded-full text-emerald-600 mb-4">
-              <ShieldCheck size={40} />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-800">Pest Disruption System</h1>
-            <p className="text-slate-500">Secure Farmer Login</p>
-          </div>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Farmer ID / Email</label>
-              <input type="text" defaultValue="rajesh.kumar@farm.com" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-              <input type="password" defaultValue="password123" className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 outline-none" />
-            </div>
-            <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl transition-colors shadow-lg shadow-emerald-200">
-              Access Dashboard
-            </button>
-          </form>
-          <div className="mt-6 text-center text-sm text-slate-400">
-            Rural Connectivity Protocol Enabled (v4.2)
-          </div>
-        </div>
-      </div>
-    );
+  :root {
+    --green: #1a7a4a;
+    --green-light: #22c55e;
+    --green-muted: #d1fae5;
+    --green-dark: #0f4c2a;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --blue: #3b82f6;
+    --bg: #f0fdf4;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+    --sidebar-w: 240px;
+    --radius: 16px;
   }
 
-  return (
-    <div className={`min-h-screen flex ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-900'}`}>
-      
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-slate-100 hidden lg:flex flex-col p-6 sticky top-0 h-screen">
-        <div className="flex items-center space-x-3 mb-10 px-2">
-          <div className="bg-emerald-600 p-2 rounded-lg text-white">
-            <ShieldCheck size={24} />
-          </div>
-          <span className="font-bold text-xl tracking-tight text-emerald-900 uppercase">PestGuard</span>
-        </div>
-        
-        <nav className="flex-1 space-y-2">
-          <SidebarItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
-          <SidebarItem id="live" icon={Video} label="Live Monitoring" />
-          <SidebarItem id="controls" icon={Settings} label="Smart Controls" />
-          <SidebarItem id="insights" icon={Zap} label="AI Insights" />
-          <SidebarItem id="devices" icon={Smartphone} label="IoT Devices" />
-          <SidebarItem id="reports" icon={FileText} label="Reports" />
-        </nav>
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+  }
 
-        <div className="pt-6 border-t border-slate-100">
-          <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-xl mb-4">
-            <div className="w-10 h-10 rounded-full bg-emerald-200 flex items-center justify-center text-emerald-700">
-              <User size={20} />
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold truncate">{user.name}</p>
-              <p className="text-xs text-slate-500 truncate">{user.role}</p>
-            </div>
-          </div>
-          <button onClick={handleLogout} className="w-full flex items-center space-x-3 px-4 py-3 text-red-500 hover:bg-red-50 rounded-xl transition-all">
-            <LogOut size={20} />
-            <span className="font-medium">Sign Out</span>
-          </button>
-        </div>
-      </aside>
+  /* ---- LOGIN ---- */
+  #login-screen {
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, #0f4c2a 0%, #166534 50%, #15803d 100%);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 999;
+    padding: 20px;
+  }
+  .login-card {
+    background: #fff;
+    border-radius: 24px;
+    padding: 48px;
+    width: 100%; max-width: 420px;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.3);
+    animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1);
+  }
+  @keyframes slideUp { from { opacity:0; transform: translateY(30px); } to { opacity:1; transform: translateY(0); } }
+  .login-logo { display: flex; align-items: center; justify-content: center; margin-bottom: 32px; }
+  .login-logo-icon {
+    width: 64px; height: 64px;
+    background: var(--green-dark);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+  }
+  .login-title { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; color: var(--text); text-align: center; margin-bottom: 4px; }
+  .login-sub { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px; }
+  .form-group input {
+    width: 100%; padding: 14px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input:focus { border-color: var(--green); }
+  .login-btn {
+    width: 100%; padding: 16px;
+    background: var(--green-dark);
+    color: #fff;
+    border: none; border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-size: 15px; font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-top: 8px;
+  }
+  .login-btn:hover { background: var(--green); }
+  .login-btn:active { transform: scale(0.98); }
 
-      {/* Main Content */}
-      <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
-        {/* Header */}
-        <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-          <div>
-            <h2 className="text-2xl font-bold capitalize">{page.replace('-', ' ')}</h2>
-            <p className="text-slate-500">Live system status from Field A & B</p>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            {isOffline && (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold animate-pulse">
-                <WifiOff size={14} />
-                <span>OFFLINE MODE ACTIVE</span>
-              </div>
-            )}
-            <button className="p-2 text-slate-400 hover:text-emerald-600 transition-colors">
-              <Bell size={24} />
-            </button>
-            <button 
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 text-slate-400 hover:text-emerald-600 transition-colors"
-            >
-              {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-            </button>
-            <div className="hidden md:block text-right">
-              <p className="text-sm font-bold">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
-              <p className="text-xs text-slate-400">System Uptime: 142h</p>
-            </div>
-          </div>
-        </header>
+  /* ---- LAYOUT ---- */
+  #app { display: none; width: 100%; }
+  #app.visible { display: flex; }
 
-        {/* Dynamic Pages */}
-        {page === 'dashboard' && (
-          <div className="space-y-6">
-            {/* Top Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard 
-                title="Pest Activity" 
-                value={pestData.activity} 
-                icon={Bug} 
-                color="bg-red-500" 
-                trend={pestData.count > 20 ? "+12%" : "-5%"} 
-              />
-              <StatCard 
-                title="Fungus Risk" 
-                value={`${sensors.humidity > 80 ? 'High' : 'Low'} (${Math.round(sensors.humidity * 0.8)}%)`} 
-                icon={Droplets} 
-                color="bg-blue-500" 
-              />
-              <StatCard 
-                title="Active Devices" 
-                value="12 / 14" 
-                icon={Smartphone} 
-                color="bg-emerald-500" 
-              />
-              <StatCard 
-                title="Avg Temp" 
-                value={`${Math.round(sensors.temp)}°C`} 
-                icon={Thermometer} 
-                color="bg-orange-500" 
-              />
-            </div>
+  aside {
+    width: var(--sidebar-w);
+    background: var(--green-dark);
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    padding: 28px 16px;
+    position: sticky; top: 0; height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 8px;
+    margin-bottom: 40px;
+  }
+  .brand-icon {
+    width: 36px; height: 36px; background: var(--green-light);
+    border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .brand-name {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px; font-weight: 800;
+    color: #fff; letter-spacing: 1px;
+  }
+  .nav-section { font-size: 10px; font-weight: 600; color: #6b9b7f; letter-spacing: 1.5px; text-transform: uppercase; padding: 0 12px; margin: 20px 0 8px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    color: #a7d9b8;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none; background: none;
+    width: 100%; text-align: left;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+  .nav-item.active { background: var(--green-light); color: var(--green-dark); font-weight: 700; }
+  .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .sidebar-footer { margin-top: auto; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+  .logout-btn {
+    display: flex; align-items: center; gap: 10px;
+    color: #fca5a5; font-size: 14px; font-weight: 500;
+    padding: 10px 12px; border-radius: 10px;
+    cursor: pointer; border: none; background: none;
+    width: 100%; transition: background 0.2s;
+  }
+  .logout-btn:hover { background: rgba(239,68,68,0.15); }
 
-            {/* Graphs Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <h3 className="text-lg font-bold mb-6 flex items-center space-x-2">
-                  <Droplets className="text-blue-500" size={20} />
-                  <span>Humidity vs Time</span>
-                </h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={historicalData}>
-                      <defs>
-                        <linearGradient id="colorHum" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="time" fontSize={10} tickMargin={10} />
-                      <YAxis fontSize={10} />
-                      <Tooltip />
-                      <Area type="monotone" dataKey="humidity" stroke="#3b82f6" fillOpacity={1} fill="url(#colorHum)" strokeWidth={2} />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
+  /* ---- MAIN ---- */
+  main { flex: 1; padding: 32px; overflow-y: auto; min-width: 0; }
 
-              <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <h3 className="text-lg font-bold mb-6 flex items-center space-x-2">
-                  <Bug className="text-red-500" size={20} />
-                  <span>Pest Detection Count</span>
-                </h3>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={historicalData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="time" fontSize={10} tickMargin={10} />
-                      <YAxis fontSize={10} />
-                      <Tooltip />
-                      <Bar dataKey="pests" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+  }
+  .page-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; }
+  .header-actions { display: flex; align-items: center; gap: 12px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 8px 14px; border-radius: 100px;
+    font-size: 13px; font-weight: 500;
+  }
+  .user-avatar {
+    width: 26px; height: 26px; background: var(--green-dark);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 11px; font-family: 'Syne', sans-serif; font-weight: 700;
+  }
+  .notif-btn {
+    position: relative; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 50%; width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 18px;
+  }
+  .notif-badge {
+    position: absolute; top: -4px; right: -4px;
+    background: var(--red); color: #fff;
+    font-size: 10px; font-weight: 700;
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
 
-            {/* Notifications & Alerts */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">Recent Alerts</h3>
-                <button className="text-emerald-600 text-sm font-bold hover:underline" onClick={() => setPage('notifications')}>View All</button>
-              </div>
-              <div className="space-y-3">
-                {sensors.humidity > 80 && (
-                  <div className="flex items-center space-x-4 p-4 bg-red-50 border border-red-100 rounded-xl text-red-700">
-                    <AlertTriangle size={20} />
-                    <div className="flex-1">
-                      <p className="font-bold text-sm">Critical Humidity Detected</p>
-                      <p className="text-xs">Current Level: {Math.round(sensors.humidity)}%. Fungal risk increased by 40%.</p>
-                    </div>
-                    <span className="text-xs opacity-60">Just now</span>
-                  </div>
-                )}
-                {pestData.count > 20 && (
-                  <div className="flex items-center space-x-4 p-4 bg-amber-50 border border-amber-100 rounded-xl text-amber-700">
-                    <Bug size={20} />
-                    <div className="flex-1">
-                      <p className="font-bold text-sm">Pest Activity Increasing</p>
-                      <p className="text-xs">Unusual movement detected in North Field. Activate disruption soon.</p>
-                    </div>
-                    <span className="text-xs opacity-60">2m ago</span>
-                  </div>
-                )}
-                {notifications.map(note => (
-                  <div key={note.id} className="flex items-center space-x-4 p-4 bg-slate-50 border border-slate-100 rounded-xl text-slate-700">
-                    <Bell size={20} className="text-emerald-600" />
-                    <div className="flex-1">
-                      <p className="font-bold text-sm">{note.text}</p>
-                      <p className="text-xs">Automated system update</p>
-                    </div>
-                    <span className="text-xs opacity-60">{note.time}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+  /* ---- NOTIFICATIONS ---- */
+  #notif-bar { margin-bottom: 20px; display: flex; flex-direction: column; gap: 8px; }
+  .notif-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-radius: 10px;
+    font-size: 13px; font-weight: 500;
+    animation: fadeIn 0.3s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+  .notif-item.warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .notif-item.info { background: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; }
+  .notif-time { margin-left: auto; opacity: 0.6; font-size: 11px; font-family: 'DM Mono', monospace; }
 
-        {page === 'live' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2 bg-slate-800 rounded-3xl overflow-hidden relative aspect-video shadow-2xl">
-                {/* Simulated Feed */}
-                <img 
-                  src="https://images.unsplash.com/photo-1592982537447-7440770cbfc9?auto=format&fit=crop&q=80&w=1200" 
-                  alt="Farm Feed" 
-                  className="w-full h-full object-cover opacity-60"
-                />
-                <div className="absolute top-4 left-4 flex items-center space-x-2 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest animate-pulse">
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                  <span>Live Feed: Field A - Zone 4</span>
-                </div>
-                
-                {/* AI Overlays */}
-                {pestData.yellowSpots && (
-                  <div className="absolute top-1/4 left-1/3 w-32 h-32 border-2 border-yellow-400 rounded-full animate-ping flex items-center justify-center">
-                    <span className="bg-yellow-400 text-black text-[10px] font-bold px-2 py-0.5 rounded">FUNGUS DETECTED</span>
-                  </div>
-                )}
-                
-                <div className="absolute bottom-6 right-6 flex items-center space-x-4">
-                  <button className="bg-white/10 backdrop-blur-md p-3 rounded-full text-white hover:bg-white/20 transition-all">
-                    <Smartphone size={24} />
-                  </button>
-                  <button className="bg-white/10 backdrop-blur-md p-3 rounded-full text-white hover:bg-white/20 transition-all">
-                    <Settings size={24} />
-                  </button>
-                </div>
-              </div>
+  /* ---- PAGES ---- */
+  .page { display: none; animation: fadeIn 0.3s ease; }
+  .page.active { display: block; }
 
-              <div className="space-y-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                  <h3 className="font-bold mb-4 flex items-center space-x-2">
-                    <Zap className="text-emerald-600" size={20} />
-                    <span>AI Detection Logic</span>
-                  </h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                      <span className="text-sm">Yellow Spots (Fungus)</span>
-                      <span className={`text-xs font-bold px-2 py-1 rounded-lg ${pestData.yellowSpots ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
-                        {pestData.yellowSpots ? 'DETECTED' : 'CLEAR'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                      <span className="text-sm">Pest Swarm Alert</span>
-                      <span className={`text-xs font-bold px-2 py-1 rounded-lg ${pestData.count > 40 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {pestData.count > 40 ? 'HIGH RISK' : 'NORMAL'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+  /* ---- STAT CARDS ---- */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .stat-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
+  .stat-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .stat-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .stat-trend { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 100px; }
+  .trend-up { background: #fee2e2; color: var(--red); }
+  .trend-down { background: #dcfce7; color: #166534; }
+  .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+  .stat-value { font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; }
 
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                  <h3 className="font-bold mb-4">Real-Time Sensors</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-4 bg-orange-50 rounded-2xl text-orange-700 text-center">
-                      <Thermometer size={20} className="mx-auto mb-2" />
-                      <p className="text-xl font-bold">{Math.round(sensors.temp)}°C</p>
-                      <p className="text-[10px] uppercase font-bold opacity-70">Temp</p>
-                    </div>
-                    <div className="p-4 bg-blue-50 rounded-2xl text-blue-700 text-center">
-                      <Droplets size={20} className="mx-auto mb-2" />
-                      <p className="text-xl font-bold">{Math.round(sensors.humidity)}%</p>
-                      <p className="text-[10px] uppercase font-bold opacity-70">Humidity</p>
-                    </div>
-                    <div className="p-4 bg-emerald-50 rounded-2xl text-emerald-700 text-center col-span-2">
-                      <Wind size={20} className="mx-auto mb-2" />
-                      <p className="text-xl font-bold">{Math.round(sensors.moisture)}%</p>
-                      <p className="text-[10px] uppercase font-bold opacity-70">Soil Moisture</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+  /* ---- SENSOR MINI CARDS ---- */
+  .sensor-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
+  .sensor-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; }
+  .sensor-label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .sensor-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; margin-bottom: 10px; }
+  .progress-bar { height: 6px; background: #e2e8f0; border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; transition: width 1s ease; }
 
-        {page === 'controls' && (
-          <div className="max-w-4xl mx-auto space-y-8">
-            {/* Mode Switcher */}
-            <div className="bg-emerald-800 p-8 rounded-3xl text-white shadow-xl flex items-center justify-between">
-              <div>
-                <h3 className="text-2xl font-bold mb-2">Smart Operation Mode</h3>
-                <p className="opacity-80">
-                  {controls.autoMode 
-                    ? "System is managing disruption and capsules based on AI insights." 
-                    : "Manual control active. Disruption logic is bypassed."}
-                </p>
-              </div>
-              <button 
-                onClick={() => setControls(prev => ({ ...prev, autoMode: !prev.autoMode }))}
-                className={`flex items-center space-x-3 px-6 py-3 rounded-2xl font-bold transition-all ${
-                  controls.autoMode ? 'bg-white text-emerald-800' : 'bg-emerald-600 text-white border border-white/20'
-                }`}
-              >
-                <Power size={20} />
-                <span>{controls.autoMode ? 'AUTO ON' : 'MANUAL'}</span>
-              </button>
-            </div>
+  /* ---- CHARTS ---- */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+  .chart-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 16px; color: #334155; }
+  .chart-wrap { height: 220px; position: relative; }
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Pest Disruption */}
-              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="p-4 bg-red-100 text-red-600 rounded-2xl">
-                    <Bug size={32} />
-                  </div>
-                  <button 
-                    onClick={() => toggleControl('disruptionActive')}
-                    className={`w-16 h-8 rounded-full transition-all relative ${controls.disruptionActive ? 'bg-emerald-500' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${controls.disruptionActive ? 'left-9' : 'left-1'}`}></div>
-                  </button>
-                </div>
-                <div>
-                  <h4 className="text-xl font-bold text-slate-800">Pheromone Disruption</h4>
-                  <p className="text-slate-500 text-sm">Disrupt pest communication channels via pheromone signal pulse.</p>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-2 font-medium">
-                      <span>Signal Strength</span>
-                      <span>{controls.signalStrength}%</span>
-                    </div>
-                    <input 
-                      type="range" 
-                      className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
-                      value={controls.signalStrength}
-                      onChange={(e) => setControls(prev => ({ ...prev, signalStrength: e.target.value, autoMode: false }))}
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    {['Low', 'Medium', 'High'].map(freq => (
-                      <button
-                        key={freq}
-                        onClick={() => setControls(prev => ({ ...prev, frequency: freq, autoMode: false }))}
-                        className={`flex-1 py-2 rounded-xl text-sm font-bold transition-all ${
-                          controls.frequency === freq ? 'bg-emerald-600 text-white' : 'bg-slate-50 text-slate-500'
-                        }`}
-                      >
-                        {freq}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+  /* ---- CONTROLS ---- */
+  .auto-banner {
+    background: var(--green-dark);
+    border-radius: 20px; padding: 28px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; flex-wrap: wrap; gap: 16px;
+  }
+  .auto-banner h3 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .auto-banner p { font-size: 13px; color: #a7d9b8; }
+  .mode-btn {
+    padding: 12px 24px; border-radius: 12px;
+    font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700;
+    cursor: pointer; border: none; transition: all 0.2s;
+  }
+  .mode-btn.auto { background: var(--green-light); color: var(--green-dark); }
+  .mode-btn.manual { background: rgba(255,255,255,0.15); color: #fff; border: 1px solid rgba(255,255,255,0.3); }
 
-              {/* Fungal Capsule */}
-              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="p-4 bg-blue-100 text-blue-600 rounded-2xl">
-                    <Droplets size={32} />
-                  </div>
-                  <button 
-                    onClick={() => toggleControl('capsuleActive')}
-                    className={`w-16 h-8 rounded-full transition-all relative ${controls.capsuleActive ? 'bg-emerald-500' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${controls.capsuleActive ? 'left-9' : 'left-1'}`}></div>
-                  </button>
-                </div>
-                <div>
-                  <h4 className="text-xl font-bold text-slate-800">Anti-Fungal Release</h4>
-                  <p className="text-slate-500 text-sm">Automated release of bio-fungicide capsules in the targeted field zone.</p>
-                </div>
-                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                  <div className="flex items-center space-x-3 text-blue-800">
-                    <Info size={16} />
-                    <p className="text-xs font-medium">Auto-Logic: Only release when humidity &gt; 80%</p>
-                  </div>
-                </div>
-                <button className="w-full py-4 bg-slate-900 text-white font-bold rounded-2xl hover:bg-slate-800 transition-all flex items-center justify-center space-x-2">
-                  <Zap size={20} />
-                  <span>Immediate Flush (Admin)</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+  .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 800px; }
+  @media (max-width: 700px) { .controls-grid { grid-template-columns: 1fr; } }
+  .control-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 28px; }
+  .control-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .control-icon { font-size: 32px; }
+  .toggle {
+    width: 52px; height: 28px; border-radius: 99px;
+    background: #e2e8f0; border: none; cursor: pointer;
+    position: relative; transition: background 0.3s;
+  }
+  .toggle.on { background: var(--green-light); }
+  .toggle::after {
+    content: ''; position: absolute;
+    top: 3px; left: 3px;
+    width: 22px; height: 22px;
+    background: #fff; border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    transition: left 0.3s;
+  }
+  .toggle.on::after { left: 27px; }
+  .control-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .control-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; }
+  input[type=range] {
+    width: 100%; accent-color: var(--green);
+    height: 6px; cursor: pointer;
+  }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 99px;
+    font-size: 12px; font-weight: 600; margin-top: 14px;
+  }
+  .status-pill.active { background: #dcfce7; color: #166534; }
+  .status-pill.inactive { background: #f1f5f9; color: var(--muted); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status-dot.active { background: var(--green-light); }
+  .status-dot.inactive { background: #94a3b8; }
 
-        {page === 'insights' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-lg font-bold mb-6">24hr Prediction Engine</h3>
-                <div className="space-y-6">
-                  <div className="relative pt-1">
-                    <div className="flex mb-2 items-center justify-between">
-                      <div>
-                        <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-red-600 bg-red-200">
-                          Pest Risk
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-semibold inline-block text-red-600">
-                          High (82%)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-red-100">
-                      <div style={{ width: "82%" }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-red-500"></div>
-                    </div>
-                  </div>
-                  <div className="relative pt-1">
-                    <div className="flex mb-2 items-center justify-between">
-                      <div>
-                        <span className="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">
-                          Fungal Infection Probability
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-xs font-semibold inline-block text-blue-600">
-                          Moderate (45%)
-                        </span>
-                      </div>
-                    </div>
-                    <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-blue-100">
-                      <div style={{ width: "45%" }} className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-blue-500"></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+  .info-box {
+    background: #eff6ff; border: 1px solid #bfdbfe;
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 12px; color: #1e40af; font-weight: 500;
+    margin-top: 16px;
+  }
 
-              <div className="bg-emerald-900 p-8 rounded-3xl text-white">
-                <h3 className="text-xl font-bold mb-6 flex items-center space-x-2">
-                  <ShieldCheck size={24} className="text-emerald-400" />
-                  <span>Recommendation Engine</span>
-                </h3>
-                <ul className="space-y-4">
-                  {[
-                    "Increase signal frequency to 'High' between 10 PM - 2 AM.",
-                    "Check North Field sensor node for battery replacement.",
-                    "Reduce irrigation in Zone B due to high soil moisture levels.",
-                    "Activate pre-emptive disruption in Zone A (Forecasted rain)."
-                  ].map((text, i) => (
-                    <li key={i} className="flex items-start space-x-3 bg-white/10 p-4 rounded-2xl">
-                      <div className="mt-1"><Zap size={14} className="text-emerald-300" /></div>
-                      <p className="text-sm font-medium">{text}</p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
+  /* ---- DEVICES ---- */
+  .devices-list { display: flex; flex-direction: column; gap: 12px; max-width: 700px; }
+  .device-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+  }
+  .device-left { display: flex; align-items: center; gap: 14px; }
+  .device-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .device-dot.active { background: var(--green-light); box-shadow: 0 0 0 4px #dcfce7; }
+  .device-dot.offline { background: #94a3b8; }
+  .device-name { font-weight: 600; font-size: 14px; }
+  .device-meta { font-size: 12px; color: var(--muted); font-family: 'DM Mono', monospace; margin-top: 2px; }
+  .device-right { display: flex; align-items: center; gap: 16px; }
+  .battery-num { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; }
+  .battery-low { color: var(--red); }
+  .battery-ok { color: var(--green); }
+  .device-badge {
+    padding: 4px 10px; border-radius: 99px;
+    font-size: 11px; font-weight: 700;
+  }
+  .badge-active { background: #dcfce7; color: #166534; }
+  .badge-offline { background: #fee2e2; color: #991b1b; }
 
-        {page === 'devices' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xl font-bold">IoT Fleet Management</h3>
-              <button className="bg-emerald-600 text-white px-4 py-2 rounded-xl flex items-center space-x-2 font-bold text-sm">
-                <Plus size={18} />
-                <span>Add Device</span>
-              </button>
-            </div>
-            
-            <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-100">
-                  <tr>
-                    <th className="px-6 py-4 text-sm font-bold text-slate-600">Device ID</th>
-                    <th className="px-6 py-4 text-sm font-bold text-slate-600">Location</th>
-                    <th className="px-6 py-4 text-sm font-bold text-slate-600">Battery</th>
-                    <th className="px-6 py-4 text-sm font-bold text-slate-600">Status</th>
-                    <th className="px-6 py-4 text-sm font-bold text-slate-600">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {devices.map(device => (
-                    <tr key={device.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-medium">{device.id}</td>
-                      <td className="px-6 py-4 text-sm text-slate-500">
-                        <div className="flex items-center space-x-1">
-                          <MapPin size={14} />
-                          <span>{device.location}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-12 h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full ${device.battery < 20 ? 'bg-red-500' : 'bg-emerald-500'}`} 
-                              style={{ width: `${device.battery}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-xs font-bold">{device.battery}%</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
-                          device.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {device.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button className="text-slate-400 hover:text-emerald-600"><Settings size={18} /></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+  /* ---- PLACEHOLDER ---- */
+  .placeholder {
+    background: var(--surface); border: 2px dashed var(--border);
+    border-radius: 24px; padding: 64px;
+    text-align: center; color: var(--muted);
+  }
+  .placeholder-icon { font-size: 48px; margin-bottom: 16px; }
+  .placeholder h3 { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .placeholder p { font-size: 13px; }
 
-        {page === 'reports' && (
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm max-w-3xl mx-auto text-center space-y-6">
-            <div className="inline-flex p-6 bg-emerald-50 text-emerald-600 rounded-full">
-              <BarChart3 size={48} />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold">Historical Efficiency Report</h3>
-              <p className="text-slate-500 mt-2">Generate a comprehensive summary of pest reduction and chemical usage optimization over the last quarter.</p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-left">
-                <p className="text-sm text-slate-500 font-medium">Pest Population Reduction</p>
-                <p className="text-3xl font-bold text-emerald-600 mt-1">68.4%</p>
-                <p className="text-xs text-slate-400 mt-2">Since implementation (July 2023)</p>
-              </div>
-              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-left">
-                <p className="text-sm text-slate-500 font-medium">Chemical Usage Decrease</p>
-                <p className="text-3xl font-bold text-blue-600 mt-1">42.1%</p>
-                <p className="text-xs text-slate-400 mt-2">Saved over $2,400 this season</p>
-              </div>
-            </div>
+  /* ---- MOBILE NAV ---- */
+  .mobile-nav {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 10px; justify-content: space-around;
+    z-index: 100;
+  }
+  .mob-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    color: var(--muted); font-size: 10px; font-weight: 500;
+    cursor: pointer; border: none; background: none; padding: 4px 10px;
+    border-radius: 8px; transition: color 0.2s;
+  }
+  .mob-btn.active { color: var(--green); }
+  .mob-btn svg { width: 20px; height: 20px; }
 
-            <div className="flex flex-col sm:flex-row gap-4 pt-6">
-              <button className="flex-1 bg-emerald-600 text-white font-bold py-4 rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center space-x-2">
-                <FileText size={20} />
-                <span>Export PDF Summary</span>
-              </button>
-              <button className="flex-1 bg-white border border-slate-200 text-slate-700 font-bold py-4 rounded-2xl hover:bg-slate-50 transition-all flex items-center justify-center space-x-2">
-                <Smartphone size={20} />
-                <span>Send to Mobile</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
+  @media (max-width: 768px) {
+    aside { display: none; }
+    main { padding: 20px 16px 80px; }
+    .mobile-nav { display: flex; }
+  }
+</style>
+</head>
+<body>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 px-6 py-4 flex justify-between items-center z-50">
-        <button onClick={() => setPage('dashboard')} className={page === 'dashboard' ? 'text-emerald-600' : 'text-slate-400'}><LayoutDashboard size={24} /></button>
-        <button onClick={() => setPage('live')} className={page === 'live' ? 'text-emerald-600' : 'text-slate-400'}><Video size={24} /></button>
-        <button onClick={() => setPage('controls')} className={page === 'controls' ? 'text-emerald-600' : 'text-slate-400'}><Settings size={24} /></button>
-        <button onClick={() => setPage('insights')} className={page === 'insights' ? 'text-emerald-600' : 'text-slate-400'}><Zap size={24} /></button>
-        <button onClick={() => setPage('reports')} className={page === 'reports' ? 'text-emerald-600' : 'text-slate-400'}><FileText size={24} /></button>
-      </nav>
-
-      {/* Toast Alert Simulation */}
-      {isOffline && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-slate-900/90 backdrop-blur text-white px-6 py-3 rounded-2xl shadow-2xl z-[100] flex items-center space-x-4 border border-white/10">
-          <WifiOff size={20} className="text-amber-400" />
-          <div className="text-sm font-medium">
-            <p>Syncing Paused: Rural Connectivity Mode</p>
-            <p className="opacity-60 text-xs">Offline data will be uploaded once connection restores.</p>
-          </div>
-        </div>
-      )}
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">🌿</div>
     </div>
-  );
+    <div class="login-title">PestGuard</div>
+    <div class="login-sub">Pest Disruption Management System</div>
+    <div class="form-group">
+      <label>Farmer ID / Email</label>
+      <input type="text" id="email-in" value="rajesh.kumar@farm.com"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="pass-in" value="password123"/>
+    </div>
+    <button class="login-btn" onclick="doLogin()">Access Dashboard</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- SIDEBAR -->
+  <aside>
+    <div class="sidebar-brand">
+      <div class="brand-icon">🌿</div>
+      <span class="brand-name">PESTGUARD</span>
+    </div>
+    <div class="nav-section">Main</div>
+    <button class="nav-item active" onclick="goPage('dashboard', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" onclick="goPage('live', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      Live Monitoring
+    </button>
+    <button class="nav-item" onclick="goPage('controls', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Smart Controls
+    </button>
+    <button class="nav-item" onclick="goPage('insights', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      AI Insights
+    </button>
+    <button class="nav-item" onclick="goPage('devices', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+      IoT Devices
+    </button>
+    <button class="nav-item" onclick="goPage('reports', this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Reports
+    </button>
+    <div class="sidebar-footer">
+      <button class="logout-btn" onclick="doLogout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign Out
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main>
+    <div class="page-header">
+      <h1 class="page-title" id="page-title">Dashboard</h1>
+      <div class="header-actions">
+        <div class="notif-btn" onclick="toggleNotifs()">
+          🔔
+          <div class="notif-badge" id="notif-count" style="display:none">0</div>
+        </div>
+        <div class="user-chip">
+          <div class="user-avatar">RK</div>
+          <span>Rajesh Kumar</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="notif-bar"></div>
+
+    <!-- DASHBOARD PAGE -->
+    <div class="page active" id="page-dashboard">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon" style="background:#fee2e2">🐛</div>
+            <span class="stat-trend trend-up" id="stat-pest-trend">+12%</span>
+          </div>
+          <div class="stat-label">Pest Activity</div>
+          <div class="stat-value" id="stat-pest-activity">Low</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon" style="background:#dbeafe">💧</div>
+          </div>
+          <div class="stat-label">Fungus Risk</div>
+          <div class="stat-value" id="stat-fungus-risk">Low</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon" style="background:#dcfce7">📱</div>
+          </div>
+          <div class="stat-label">Active Devices</div>
+          <div class="stat-value">12 / 14</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-top">
+            <div class="stat-icon" style="background:#fed7aa">🌡️</div>
+          </div>
+          <div class="stat-label">Avg Temperature</div>
+          <div class="stat-value" id="stat-temp">28°C</div>
+        </div>
+      </div>
+
+      <div class="sensor-grid" style="margin-bottom:24px">
+        <div class="sensor-card">
+          <div class="sensor-label">💧 Humidity</div>
+          <div class="sensor-value" id="sensor-humidity">65%</div>
+          <div class="progress-bar"><div class="progress-fill" id="bar-humidity" style="width:65%;background:#3b82f6"></div></div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-label">🌱 Soil Moisture</div>
+          <div class="sensor-value" id="sensor-moisture">40%</div>
+          <div class="progress-bar"><div class="progress-fill" id="bar-moisture" style="width:40%;background:#22c55e"></div></div>
+        </div>
+        <div class="sensor-card">
+          <div class="sensor-label">🐛 Pest Count</div>
+          <div class="sensor-value" id="sensor-pest-count">12</div>
+          <div id="activity-badge" class="status-pill inactive"><div class="status-dot inactive"></div> Low Activity</div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card">
+          <div class="chart-title">Humidity Trend</div>
+          <div class="chart-wrap"><canvas id="humidity-chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Pest Activity</div>
+          <div class="chart-wrap"><canvas id="pest-chart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTROLS PAGE -->
+    <div class="page" id="page-controls">
+      <div class="auto-banner">
+        <div>
+          <h3>Smart Operation Mode</h3>
+          <p id="auto-desc">System is managing disruption automatically.</p>
+        </div>
+        <button class="mode-btn auto" id="auto-btn" onclick="toggleAutoMode()">AUTO ON</button>
+      </div>
+      <div class="controls-grid">
+        <div class="control-card">
+          <div class="control-head">
+            <div class="control-icon">🐛</div>
+            <button class="toggle" id="toggle-disruption" onclick="toggleControl('disruption')"></button>
+          </div>
+          <div class="control-title">Pheromone Disruption</div>
+          <div class="control-sub">Signal strength: <span id="signal-label">75</span>%</div>
+          <input type="range" min="0" max="100" value="75" id="signal-range" oninput="updateSignal(this.value)"/>
+          <div><span class="status-pill inactive" id="disruption-status"><span class="status-dot inactive"></span> Inactive</span></div>
+        </div>
+        <div class="control-card">
+          <div class="control-head">
+            <div class="control-icon">💧</div>
+            <button class="toggle" id="toggle-capsule" onclick="toggleControl('capsule')"></button>
+          </div>
+          <div class="control-title">Anti-Fungal Release</div>
+          <div class="control-sub">Humidity-triggered system</div>
+          <div class="info-box">ℹ️ Auto-Logic: Only releases when humidity > 80%</div>
+          <div><span class="status-pill inactive" id="capsule-status"><span class="status-dot inactive"></span> Standby</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEVICES PAGE -->
+    <div class="page" id="page-devices">
+      <div class="devices-list" id="devices-list"></div>
+    </div>
+
+    <!-- OTHER PAGES -->
+    <div class="page" id="page-live">
+      <div class="placeholder">
+        <div class="placeholder-icon">📹</div>
+        <h3>Live Monitoring</h3>
+        <p>Camera feeds and live sensor streams will appear here.</p>
+      </div>
+    </div>
+    <div class="page" id="page-insights">
+      <div class="placeholder">
+        <div class="placeholder-icon">⚡</div>
+        <h3>AI Insights</h3>
+        <p>Machine learning predictions and recommendations.</p>
+      </div>
+    </div>
+    <div class="page" id="page-reports">
+      <div class="placeholder">
+        <div class="placeholder-icon">📄</div>
+        <h3>Reports</h3>
+        <p>Generate and export field reports.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- MOBILE NAV -->
+  <nav class="mobile-nav">
+    <button class="mob-btn active" onclick="goPage('dashboard', this)" id="mob-dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Home
+    </button>
+    <button class="mob-btn" onclick="goPage('controls', this)" id="mob-controls">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Controls
+    </button>
+    <button class="mob-btn" onclick="goPage('devices', this)" id="mob-devices">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      Devices
+    </button>
+  </nav>
+</div>
+
+<script>
+// ---- STATE ----
+const state = {
+  sensors: { temp: 28, humidity: 65, moisture: 40 },
+  pestData: { activity: 'Low', count: 12, yellowSpots: false },
+  controls: { autoMode: true, disruptionActive: false, capsuleActive: false, signalStrength: 75 },
+  historicalData: [],
+  notifications: [],
+  currentPage: 'dashboard'
 };
 
-// Simple Icon Fallback
-const Info = ({ size }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-  </svg>
-);
+const devices = [
+  { id: 'IOT-001', name: 'North Field Hub', location: 'Field A', battery: 85, status: 'Active' },
+  { id: 'IOT-002', name: 'South Pheromone Dispenser', location: 'Field B', battery: 92, status: 'Active' },
+  { id: 'IOT-003', name: 'Fungal Camera Node', location: 'Field A', battery: 12, status: 'Offline' },
+];
 
-export default App;
+// ---- CHARTS ----
+let humidityChart, pestChart;
+
+function initCharts() {
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#94a3b8' } },
+      y: { grid: { color: '#f1f5f9' }, ticks: { font: { size: 10 }, color: '#94a3b8' } }
+    }
+  };
+
+  humidityChart = new Chart(document.getElementById('humidity-chart'), {
+    type: 'line',
+    data: {
+      labels: [], datasets: [{
+        data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)',
+        fill: true, tension: 0.4, pointRadius: 2, borderWidth: 2
+      }]
+    },
+    options: { ...baseOpts }
+  });
+
+  pestChart = new Chart(document.getElementById('pest-chart'), {
+    type: 'bar',
+    data: {
+      labels: [], datasets: [{
+        data: [], backgroundColor: '#ef4444', borderRadius: 4
+      }]
+    },
+    options: { ...baseOpts }
+  });
+}
+
+function updateCharts() {
+  const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  state.historicalData.push({ time: t, humidity: Math.round(state.sensors.humidity), pests: state.pestData.count });
+  if (state.historicalData.length > 15) state.historicalData.shift();
+
+  const labels = state.historicalData.map(d => d.time);
+  humidityChart.data.labels = labels;
+  humidityChart.data.datasets[0].data = state.historicalData.map(d => d.humidity);
+  humidityChart.update('none');
+
+  pestChart.data.labels = labels;
+  pestChart.data.datasets[0].data = state.historicalData.map(d => d.pests);
+  pestChart.update('none');
+}
+
+// ---- SENSOR UPDATE ----
+function updateSensorUI() {
+  const s = state.sensors;
+  const p = state.pestData;
+
+  document.getElementById('sensor-humidity').textContent = Math.round(s.humidity) + '%';
+  document.getElementById('sensor-moisture').textContent = Math.round(s.moisture) + '%';
+  document.getElementById('sensor-pest-count').textContent = p.count;
+  document.getElementById('bar-humidity').style.width = s.humidity + '%';
+  document.getElementById('bar-moisture').style.width = s.moisture + '%';
+  document.getElementById('stat-temp').textContent = Math.round(s.temp) + '°C';
+  document.getElementById('stat-pest-activity').textContent = p.activity;
+  document.getElementById('stat-fungus-risk').textContent = s.humidity > 80 ? 'High' : 'Low';
+
+  const badge = document.getElementById('activity-badge');
+  const isHigh = p.activity === 'High', isMed = p.activity === 'Medium';
+  badge.className = 'status-pill ' + (isHigh || isMed ? 'active' : 'inactive');
+  badge.innerHTML = `<div class="status-dot ${isHigh || isMed ? 'active' : 'inactive'}"></div> ${p.activity} Activity`;
+
+  const trend = document.getElementById('stat-pest-trend');
+  if (p.count > 20) { trend.textContent = '+12%'; trend.className = 'stat-trend trend-up'; }
+  else { trend.textContent = '-5%'; trend.className = 'stat-trend trend-down'; }
+}
+
+// ---- CONTROLS UI ----
+function updateControlsUI() {
+  const c = state.controls;
+  const dBtn = document.getElementById('toggle-disruption');
+  const cBtn = document.getElementById('toggle-capsule');
+  dBtn.className = 'toggle' + (c.disruptionActive ? ' on' : '');
+  cBtn.className = 'toggle' + (c.capsuleActive ? ' on' : '');
+
+  const dStatus = document.getElementById('disruption-status');
+  dStatus.className = 'status-pill ' + (c.disruptionActive ? 'active' : 'inactive');
+  dStatus.innerHTML = `<span class="status-dot ${c.disruptionActive ? 'active' : 'inactive'}"></span> ${c.disruptionActive ? 'Active' : 'Inactive'}`;
+
+  const cStatus = document.getElementById('capsule-status');
+  cStatus.className = 'status-pill ' + (c.capsuleActive ? 'active' : 'inactive');
+  cStatus.innerHTML = `<span class="status-dot ${c.capsuleActive ? 'active' : 'inactive'}"></span> ${c.capsuleActive ? 'Releasing' : 'Standby'}`;
+
+  const autoBtn = document.getElementById('auto-btn');
+  autoBtn.className = 'mode-btn ' + (c.autoMode ? 'auto' : 'manual');
+  autoBtn.textContent = c.autoMode ? 'AUTO ON' : 'MANUAL';
+  document.getElementById('auto-desc').textContent = c.autoMode
+    ? 'System is managing disruption automatically.'
+    : 'Manual control active.';
+}
+
+// ---- NOTIFICATIONS ----
+function addNotification(text, type = 'info') {
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  state.notifications.unshift({ id: Date.now(), text, type, time });
+  if (state.notifications.length > 10) state.notifications.pop();
+  renderNotifs();
+}
+
+function renderNotifs() {
+  const bar = document.getElementById('notif-bar');
+  const badge = document.getElementById('notif-count');
+  const n = state.notifications.length;
+  if (n > 0) { badge.style.display = 'flex'; badge.textContent = n; }
+  else { badge.style.display = 'none'; }
+  bar.innerHTML = state.notifications.slice(0, 2).map(n =>
+    `<div class="notif-item ${n.type}">
+      ${n.type === 'warning' ? '⚠️' : 'ℹ️'} <span>${n.text}</span>
+      <span class="notif-time">${n.time}</span>
+    </div>`
+  ).join('');
+}
+
+function toggleNotifs() {
+  state.notifications = [];
+  renderNotifs();
+}
+
+// ---- DEVICES ----
+function renderDevices() {
+  document.getElementById('devices-list').innerHTML = devices.map(d => `
+    <div class="device-card">
+      <div class="device-left">
+        <div class="device-dot ${d.status === 'Active' ? 'active' : 'offline'}"></div>
+        <div>
+          <div class="device-name">${d.name}</div>
+          <div class="device-meta">📍 ${d.location} · ${d.id}</div>
+        </div>
+      </div>
+      <div class="device-right">
+        <div>
+          <div style="font-size:11px;color:var(--muted);font-weight:500">Battery</div>
+          <div class="battery-num ${d.battery < 20 ? 'battery-low' : 'battery-ok'}">${d.battery}%</div>
+        </div>
+        <span class="device-badge ${d.status === 'Active' ? 'badge-active' : 'badge-offline'}">${d.status}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ---- LIVE SIMULATION ----
+function tick() {
+  state.sensors.temp = Math.max(15, Math.min(45, state.sensors.temp + (Math.random() * 2 - 1)));
+  state.sensors.humidity = Math.max(30, Math.min(95, state.sensors.humidity + (Math.random() * 4 - 2)));
+  state.sensors.moisture = Math.max(10, Math.min(100, state.sensors.moisture + (Math.random() * 2 - 1)));
+
+  const newCount = Math.max(0, state.pestData.count + Math.floor(Math.random() * 5 - 2));
+  state.pestData.count = newCount;
+  state.pestData.activity = newCount > 50 ? 'High' : newCount > 20 ? 'Medium' : 'Low';
+  state.pestData.yellowSpots = Math.random() > 0.8;
+
+  // Auto-mode logic
+  if (state.controls.autoMode) {
+    if (state.sensors.humidity > 80 && state.pestData.yellowSpots && !state.controls.capsuleActive) {
+      state.controls.capsuleActive = true;
+      addNotification('Fungal Risk High: Auto-activating capsule system', 'warning');
+    } else if (state.sensors.humidity < 70 && state.controls.capsuleActive) {
+      state.controls.capsuleActive = false;
+    }
+    if (state.pestData.count > 30 && !state.controls.disruptionActive) {
+      state.controls.disruptionActive = true;
+      addNotification('Pest Activity Spike: Disruption System Engaged', 'info');
+    }
+  }
+
+  updateSensorUI();
+  updateControlsUI();
+  updateCharts();
+}
+
+// ---- ACTIONS ----
+function doLogin() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  initCharts();
+  renderDevices();
+  tick();
+  setInterval(tick, 5000);
+}
+
+function doLogout() {
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+function goPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.mob-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const titles = { dashboard: 'Dashboard', live: 'Live Monitoring', controls: 'Smart Controls', insights: 'AI Insights', devices: 'IoT Devices', reports: 'Reports' };
+  document.getElementById('page-title').textContent = titles[id] || id;
+  state.currentPage = id;
+}
+
+function toggleAutoMode() {
+  state.controls.autoMode = !state.controls.autoMode;
+  updateControlsUI();
+}
+
+function toggleControl(key) {
+  if (state.controls.autoMode && (key === 'disruption' || key === 'capsule')) {
+    state.controls.autoMode = false;
+    addNotification('Manual override: Auto-mode disabled', 'info');
+  }
+  if (key === 'disruption') state.controls.disruptionActive = !state.controls.disruptionActive;
+  if (key === 'capsule') state.controls.capsuleActive = !state.controls.capsuleActive;
+  updateControlsUI();
+}
+
+function updateSignal(val) {
+  state.controls.signalStrength = Number(val);
+  document.getElementById('signal-label').textContent = val;
+  if (state.controls.autoMode) {
+    state.controls.autoMode = false;
+    updateControlsUI();
+  }
+}
+</script>
+</body>
+</html>
